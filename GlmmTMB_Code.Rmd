@@ -480,7 +480,7 @@ head(map)
 ```
 
 ```{r}
-register_google(key = "AIzaSyBWYMcyelZv7SjBA-2qPKiJ6r97G95rbf4")
+register_google(key = "")
 ```
 
 ```{r}
