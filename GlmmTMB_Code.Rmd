@@ -1,0 +1,692 @@
+---
+title: "Temporal Dynamics of Predator Learning in a Batesian Mimicry Complex"
+author: "Abby Robinson"
+date: "10/25/2022"
+output:
+  html_document:
+    toc: true
+    toc_depth: 4
+---
+
+## Packages {.tabset}
+
+```{r}
+library(curl)
+library(ggplot2)
+library(lme4)
+library(mvtnorm)
+library(lattice)
+library(multcomp)
+library(emmeans)
+library(ggpubr)
+library(DHARMa)
+library(rstanarm)
+library(performance)
+library(MASS)
+library("glmmTMB")
+library("bbmle") ## for AICtab
+library(ggpubr)
+library(tidyverse)
+library(cowplot)
+library(patchwork)
+library(ggmap)
+library(googleway)
+library("rstudioapi")
+```
+
+```{r}
+vignette("DHARMa", package="DHARMa") ### Useful information for checking residuals/ model assumptions 
+```
+
+## [1] Did avian predators learn to avoid facsimiles of Battus philenor during 4-day experiments, compared to the undefended facsimiles of the control? {.tabset}
+
+In order to address how the time delay will affect attack rates on the mimics, we first need to show that our training experiment was effective and birds learned to avoid facsimilies of battus philenor. 
+
+I hypothesize that birds will learn to avoid the chemically defended models faster than the control, and that we will therefore see lower attack rates on the model in the last three days of the experiment compared to the control. 
+
+Because this initial question of the project is focused on the training phase of the experiment, each of the three time-delayed experiments (four, two, one) are essentially identical replicates of each other, and therefore this data can be pooled to increase power 
+
+### Load & prep count data from GitHub  
+```{r}
+c <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/Model_Count_Data.csv")
+count <- read.csv(c, header = TRUE, sep = ",")
+head(count)
+# count data looses some information that binomial data would provide, but binomial data would likely not work here due to the low overall attack rates 
+# survival analysis likely didn't work with this data because attack rates are too low for this data to be analyzed as binomial data 
+```
+
+```{r}
+# make experimental.day variable factor 
+class(count$experiment.day) 
+count$experiment.day <- as.factor(count$experiment.day)
+class(count$experiment.day)
+
+# make field.day variable factor
+class(count$field.day) 
+count$field.day <- as.factor(count$field.day)
+class(count$field.day)
+
+# make site variable factor 
+class(count$site)
+count$site <- as.factor(count$site)
+class(count$site)
+
+# make sure attack variable is integer 
+class(count$attacks) # only thing that should be an integer 
+
+# make species variable factor 
+class(count$species)
+count$species <- as.factor(count$species)
+class(count$species)
+
+# make time.delay variable factor 
+class(count$time.delay)
+count$time.delay <- as.factor(count$time.delay)
+class(count$time.delay)
+```
+
+### Assumptions for Generalized Linear Mixed Model with Poisson Distribution
+
+1. The variance is equal to the mean. Overdispersion can occur when your variance is much higher than your mean. DHARMa provides effective tools to quantify overdispersion, and when it is present, you would want to consider quasi-Poisson, negative binomial, or zero-inflated models (see CRAN package link above). 
+2. The response variable is non-negative integer data. 
+3. The responses are independent from one another. 
+4. The responses occur over fixed time or space. 
+
+
+### Assumptions for Generalized Linear Mixed Model with Negative Binomial Distribution
+
+"Negative binomial regression shares many common assumptions with Poisson regression, such as linearity in model parameters, independence of individual observations, and the multiplicative effects of independent variables. However, comparing with Poisson regression, negative binomial regression allows the conditional variance of the outcome variable to be greater than its conditional mean, which offers greater flexibility in model fitting. Note that negative binomial regression does not handle the underdispersion situation, where the conditional variance is smaller than the conditional mean. Fortunately, underdispersion is rare in practice."
+
+* The negative binomial distribution is similar to the Poisson except it has an additional parameter called a scale parameter. The scale parameter (𝜹) allows the variance to be larger (or smaller) than the mean and may reduce or remedy the over-dispersion problem. Some argue that the negative binomial should always be used for agricultural data while others disagree. 
+
+### Fitting a Model and dealing with errors 
+
+####Various models I tried: 
+```{r}
+# histogram of attacks 
+hist(count$attacks)  #concerns about zero inflation based on histogram? 
+
+# check variance and mean to assess for over /  under - dispersion 
+var(count$attacks)
+mean(count$attacks) # variance is greater than mean, which indicates that over-dispersion might be an issue 
+
+# write glmms using glmer() function (to account for random site effects) 
+
+mod1 <- glmer(attacks ~ experiment.day*species + (1|time.delay/site/field.day),  data =  count, family = poisson)
+summary(mod1)
+
+ # correlation of fixed effects look good (no perfect correlations (-1 or 1) ) 
+# there are 12 repeated measurements for each site - four days * 3 experiments
+# there are 20 repeated measurements for each field day - 20 sites 
+
+# day is nested within site and site is nested within experiment type (this fixed singularity issue but now I'm getting a different error)
+  # optimizer (Nelder_Mead) convergence code: 0 (OK)
+  # Model failed to converge with max|grad| = 0.169204 (tol = 0.002, component 1)
+  # This is a warning message that the computer did not reach a satisfactory numerical solution for your model. This just means we may have to tweak your model a little to get R to converge. This Rpubs document provides an excellent section on the technical matters involved in fitting the models in R.
+# SOURCE: https://stats.stackexchange.com/questions/228800/crossed-vs-nested-random-effects-how-do-they-differ-and-how-are-they-specified
+# CONVERGENCE ISSUES 
+
+mod2<-glmmPQL(attacks ~ experiment.day*species, random=~1|time.delay/site/field.day, data=count, family = poisson)
+summary(mod2) # No errors? 
+# SOURCE: https://rpubs.com/corey_sparks/422788
+# this worked but glmmPQL doesn't work with the DHARMa package for assumptions and residuals checks 
+
+## cosmetic
+theme_set(theme_bw()+
+theme(panel.spacing=grid::unit(0,"lines")))
+
+mod3 <- glmmTMB(attacks ~ experiment.day*species + (1|time.delay/site/field.day), data=count,ziformula=~1,family=poisson)
+# SOURCE: https://cran.r-project.org/web/packages/glmmTMB/vignettes/glmmTMB.pdf
+# no error or warning messages when i run the fitted model 
+# model fits count data to a zero inflation poisson distribution 
+# models interaction between experiment day and species 
+# nest random effects: site is nested in experiment type & day is nested in site 
+summary(mod3)
+check_singularity(mod3) # there are still singularity issues I guess... 
+# do I need to do the bayesian method? 
+
+mod4 <- glmmTMB(attacks ~ experiment.day*species + (1|site:time.delay) + (1|field.day:site:time.delay), data=count,ziformula=~1,family=poisson) 
+# remove (1|time.delay as a random effect due to variance close to zero)
+summary(mod4)
+check_singularity(mod4) 
+# no singularity issues!! 
+# no convergence issues!! 
+
+
+mod5 <- glmmTMB(attacks ~ experiment.day*species + time.delay + (1|site/field.day), data=count,ziformula=~1,family=poisson) 
+summary(mod5)
+check_singularity(mod5) 
+
+mod6 <- glmmTMB(attacks ~ experiment.day*species + (1|site/field.day), data=count,ziformula=~1,family=poisson) 
+summary(mod6)
+check_singularity(mod6) 
+```
+
+#### Description of nested random effects 
+*SOURCE: https://stats.stackexchange.com/questions/228800/crossed-vs-nested-random-effects-how-do-they-differ-and-how-are-they-specified
+*Writing the random effects this way eliminates singularity issues 
+
+![image](https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/Screen%20Shot%202022-11-11%20at%201.45.45%20PM.png)
+### Attempts at fixing convergence issues in original GLMER model 
+ SOURCE: https://rstudio-pubs-static.s3.amazonaws.com/33653_57fc7b8e5d484c909b615d8633c01d51.html
+
+nrow(df)
+length(getME(m1,"theta"))
+length(fixef(m1))
+
+ss <- getME(m1,c("theta","fixef"))
+m2 <- update(m1,start=ss,control=glmerControl(optCtrl=list(maxfun=2e9)))
+
+library(numDeriv)
+derivs1 <- m1@optinfo$derivs
+sc_grad1 <- with(derivs1,solve(Hessian,gradient))
+max(abs(sc_grad1)) # 0.01718997
+
+max(pmin(abs(sc_grad1),abs(derivs1$gradient))) # 0.01718997 - same as above 
+  # This is small, although still larger than the tolerance we typically set (0.001)
+
+dd <- update(m1,devFunOnly=TRUE)
+pars <- unlist(getME(m1,c("theta","fixef")))
+grad2 <- grad(dd,pars)
+hess2 <- hessian(dd,pars)
+sc_grad2 <- solve(hess2,grad2)
+max(pmin(abs(sc_grad2),abs(grad2))) # 0.01718999 - didn't change 
+
+library(optimx)
+library(afex)
+
+system.time(mod_all <- allFit(m1))
+
+m3 <- update(m1,start=ss,control=glmerControl(optimizer="Nelder_Mead",
+                            optCtrl=list(maxfun=2e5)))
+
+ A classic example is crossed temporal and spatial effects. If there is random variation among temporal blocks (e.g. years) ‘’and’’ random variation among spatial blocks (e.g. sites), ‘’and’’ if there is a consistent year effect across sites and ‘’vice versa’’, then the random effects should be treated as crossed.
+  # site is a random spatial effect and field day is a random temporal effect 
+
+check_singularity(m1) # some component of the mixed effects model has a value of exactly zero 
+summary(m1)
+
+library("RCurl")
+
+afurl <- "https://raw.githubusercontent.com/lme4/lme4/master/misc/issues/allFit.R"
+eval(parse(text=getURL(afurl)))
+
+
+double checking gradiant calculations 
+
+derivs_init  = m1@optinfo$derivs
+
+sc_grad_init = with(derivs_init, solve(Hessian, gradient))
+
+max(abs(sc_grad_init)) #0.01718997
+max(pmin(abs(sc_grad_init), abs(derivs_init$gradient))) # same 
+
+m1@optinfo$conv$lme4$messages[[1]] # not the same number 
+
+
+####Code for final model: 
+
+```{r}
+mod5 <- glmmTMB(attacks ~ experiment.day*species + time.delay + (1|site/field.day), data=count,ziformula=~1,family=poisson) 
+summary(mod5)
+check_singularity(mod5) 
+```
+
+### Assumptions and Residuals Checks with the DHARMa Package
+
+```{r}
+# use DHARMa package to confirm that model assumptions are met and check that residuals are consistent with the chosen distribution 
+
+mod5simulation <- simulateResiduals(fittedModel = mod5, plot = T)
+
+##under H0 (perfect model), we would expect those boxes to range homogeneously from 0.25-0.75. To see whether there are deviations from this expectation, the plot calculates a test for uniformity per box, and a test for homogeneity of variances between boxes. A positive test will be highlighted in red.
+
+testUniformity(mod5simulation) 
+testOutliers(mod5simulation)
+testDispersion(mod5simulation) 
+testZeroInflation(mod5simulation) 
+
+# In statistics, a zero-inflated model is a statistical model based on a zero-inflated probability distribution, i.e. a distribution that allows for frequent zero-valued observations.
+
+# Zero-inflated negative binomial regression is for modeling count variables with excessive zeros and it is usually for over-dispersed count outcome variables. Furthermore, theory suggests that the excess zeros are generated by a separate process from the count values and that the excess zeros can be modeled independently.
+```
+
+Notes on Uniformity & KS test: 
+
+* plotQQunif (left panel) creates a qq-plot to detect overall deviations from the expected distribution, by default with added tests for correct distribution (KS test), dispersion and outliers. Note that outliers in DHARMa are values that are by default defined as values outside the simulation envelope, not in terms of a particular quantile. Thus, which values will appear as outliers will depend on the number of simulations. If you want outliers in terms of a particuar quantile, you can use the outliers() function.
+
+* the p-value shows you that there is a significant deviation from the assumed distribution, but significance != effect size. In other words, if you have a large number of data points, even the slightest deviation will become significant. This is more or less what I think is going on here. SOURCE: https://github.com/florianhartig/DHARMa/issues/181
+
+* KS test for correct distribution of residuals -  this test basically checks if the specified distribution matches the data 
+
+### Post Hoc Test and Bonferroni Correction for Final Model 
+
+```{r}
+## MODEL 5
+post.hoc1 <- emmeans(mod5, pairwise ~ experiment.day|species) 
+
+# do I still need to do a bonferroni correction if I am no longer running "extra" pairwise comparisons 
+post.hoc1$contrasts %>%
+     rbind() # bonferroni adjustment for multiple comparisons 
+# bonferroni didn't change significance 
+```
+
+### Figures
+
+```{r}
+# code to add attack rates to dataset 
+length(count$attacks)
+attack.rate <- (count$attacks/1500)*100
+length(attack.rate)
+count$attack.rate <- attack.rate
+```
+
+```{r}
+attacks <- aggregate(x= count$attacks, by= list(count$experiment.day, count$species), FUN=sum)
+attacks
+
+attack.rates <- aggregate(x= count$attack.rate, by= list(count$experiment.day, count$species), FUN=sum)
+attack.rates
+```
+
+#### BATTUS
+
+```{r}
+# code to add standard deviation by day to dataset 
+b <- subset(count, species == "battus", drop = FALSE)
+battus <- aggregate(x=b$attack.rate, by = list(b$species, b$experiment.day), FUN=sum)
+battus
+
+b1 <- subset(b, experiment.day == "1", drop = FALSE)
+b2 <- subset(b, experiment.day == "2", drop = FALSE)
+b3 <- subset(b, experiment.day == "3", drop = FALSE)
+b4 <- subset(b, experiment.day == "4", drop = FALSE)
+
+b1.sd <- sd(b1$attack.rate)
+b2.sd <- sd(b2$attack.rate)
+b3.sd <- sd(b3$attack.rate)
+b4.sd <- sd(b4$attack.rate)
+
+battus <- data.frame(
+  Day = battus$Group.2,
+  Attack.Rate = battus$x,
+  sd = c(b1.sd, b2.sd, b3.sd, b4.sd)
+)
+battus
+```
+
+```{r}
+b <- ggplot(battus) 
+b <- b + geom_bar( aes(Day, Attack.Rate), stat="identity", fill="blue4", width=1)
+b <- b + ylim(0,1.5)
+b <- b + xlab("Day") 
+b <- b + ylab("Attack Rate") 
+b <- b + ggtitle(expression(bolditalic("Battus philenor ")))
+b <- b + geom_errorbar( aes(x=Day, ymin=Attack.Rate-sd, ymax=Attack.Rate+sd), width=0.4, size=1)
+b.plot <- b + theme( aspect.ratio = 4/3, plot.title = element_text(hjust = 0.5, size=17), axis.title = element_text(size = 15), axis.text = element_text(size = 15)) 
+b.plot 
+```
+
+#### JUNONIA
+```{r}
+# code to add standard deviation by day to dataset 
+j <- subset(count, species == "junonia", drop = FALSE)
+junonia <- aggregate(x=j$attack.rate, by = list(j$species, j$experiment.day), FUN=sum)
+junonia
+
+j1 <- subset(j, experiment.day == "1", drop = FALSE)
+j2 <- subset(j, experiment.day == "2", drop = FALSE)
+j3 <- subset(j, experiment.day == "3", drop = FALSE)
+j4 <- subset(j, experiment.day == "4", drop = FALSE)
+
+j1.sd <- sd(j1$attack.rate)
+j2.sd <- sd(j2$attack.rate)
+j3.sd <- sd(j3$attack.rate)
+j4.sd <- sd(j4$attack.rate)
+
+junonia <- data.frame(
+  Day = junonia$Group.2,
+  Attack.Rate = junonia$x,
+  sd = c(j1.sd, j2.sd, j3.sd, j4.sd)
+)
+junonia
+```
+
+```{r}
+j <- ggplot(junonia) 
+j <- j + geom_bar( aes(Day, Attack.Rate), stat="identity", fill="bisque4", width=1)
+j <- j + ylim(0,1.5)
+j <- j + xlab("Day") 
+j <- j + ylab("Attack Rate") 
+j <- j + ggtitle(expression(bolditalic("Junonia coenia ")))
+j <- j + geom_errorbar( aes(x=Day, ymin=Attack.Rate-sd, ymax=Attack.Rate+sd), width=0.4, size=1)
+j.plot <- j + theme( aspect.ratio = 4/3, plot.title = element_text(hjust = 0.5, size=17), axis.title = element_text(size = 15), axis.text = element_text(size = 15)) 
+j.plot 
+```
+
+#### Final Figure 
+
+```{r}
+figure = b.plot + j.plot 
+
+# Remove title from second subplot
+figure[[2]] = figure[[2]] + theme(axis.text.y = element_blank(),
+                                        axis.ticks.y = element_blank(),
+                                        axis.title.y = element_blank() )
+figure
+```
+
+## [2] When is limenitis protected from predation (four-week exp, two-week exp, one-week exp, or simultaneous exp)? {.tabset}
+
+Do we see significant differences in protection for the mimic as a consequence of time since predators encountered the model 
+
+### Load and Clean Data 
+```{r}
+m <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/Quabbin_Mimic_Count.csv")
+mim.data <- read.csv(m, header = TRUE, sep = ",")
+head(mim.data)
+# count data looses some information that binomial data would provide, but binomial data would likely not work here due to the low overall attack rates 
+# survival analysis likely didn't work with this data because attack rates are too low for this data to be analyzed as binomial data 
+```
+
+```{r}
+# make experimental.day variable factor 
+class(mim.data$experiment.day) 
+mim.data$experiment.day <- as.factor(mim.data$experiment.day)
+class(mim.data$experiment.day)
+
+# make field.day variable factor
+class(mim.data$field.day) 
+mim.data$field.day <- as.factor(mim.data$field.day)
+class(mim.data$field.day)
+
+# make site variable factor 
+class(mim.data$site)
+mim.data$site <- as.factor(mim.data$site)
+class(mim.data$site)
+
+# make sure attack variable is integer 
+class(mim.data$attacks) # only thing that should be an integer 
+
+# make species variable factor 
+class(mim.data$species)
+mim.data$species <- as.factor(mim.data$species)
+class(mim.data$species)
+
+# make time.delay variable factor 
+class(mim.data$time.delay)
+mim.data$time.delay <- as.factor(mim.data$time.delay)
+class(mim.data$time.delay)
+```
+
+### Data Visualization 
+
+```{r}
+hist(mim.data$attacks)  #concerns about zero inflation based on histogram? 
+
+# check variance and mean to assess for over /  under - dispersion 
+var(mim.data$attacks)
+mean(mim.data$attacks)
+```
+
+### Model Fitting 
+
+```{r}
+mod2.1 <- glmmTMB(attacks ~ time.delay/species + (1|site) + (1|field.day), data=mim.data,ziformula=~1,family=poisson) 
+# include day as a variable 
+# interaction between species and experiment 
+summary(mod2.1)
+check_singularity(mod2.1) # no singularity 
+
+mod2.2 <- glmmTMB(attacks ~ time.delay*species + species*experiment.day + (1|site) + (1|field.day), data=mim.data,ziformula=~1,family=poisson) 
+summary(mod2.2)
+check_singularity(mod2.2) #singularity issues 
+
+mod2.3 <- glmmTMB(attacks ~ time.delay/species + species*experiment.day + (1|site) + (1|field.day), data=mim.data,ziformula=~1,family=poisson) 
+check_singularity(mod2.3) #singularity issues 
+summary(mod2.3)
+
+mod2.4 <- glmmTMB(attacks ~ time.delay/species + species/experiment.day + (1|site) + (1|field.day), data=mim.data,ziformula=~1,family=poisson) 
+check_singularity(mod2.4) #singularity issues 
+summary(mod2.4)
+
+mod2.5 <- glmmTMB(attacks ~ time.delay/species + (1|site/experiment.day) + (1|field.day), data=mim.data,ziformula=~1,family=poisson) 
+check_singularity(mod2.5) #singularity issues 
+summary(mod2.5)
+
+# assumptions and residuals checks for mod4
+mod2.1simulation <- simulateResiduals(fittedModel = mod2.1, plot = T)
+testUniformity(mod2.1simulation) 
+testOutliers(mod2.1simulation)
+testDispersion(mod2.1simulation) 
+testZeroInflation(mod2.1simulation) 
+
+summary(mod2.1) # looks good! 
+```
+
+### Figures 
+
+#### Quabbin Transect Map 
+
+```{r}
+d <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/Quabbin_GIS_Data.csv")
+map <- read.csv(d, header = TRUE, sep = ",")
+head(map)
+```
+
+```{r}
+map <- subset(map, select = c(experiment, site, latitude, longitude) )
+head(map)
+```
+
+```{r}
+register_google(key = "AIzaSyBWYMcyelZv7SjBA-2qPKiJ6r97G95rbf4")
+```
+
+```{r}
+quab.map <- ggmap(get_googlemap(center = c(lon = -72.28, lat = 42.42),
+                    zoom = 11, scale = 2,
+                    maptype ='roadmap',
+                    color = 'color')) 
+quab.map <- quab.map + geom_point(aes(x = longitude, y = latitude, color = experiment), data = map, size = 3)  
+quab.map <- quab.map + theme(legend.position="right", 
+                             axis.title = element_text(size = 15, face="bold"), 
+                             axis.text = element_text(size = 15),
+                             legend.title = element_text(face ="bold")) 
+quab.map <- quab.map + xlab("Longitude") 
+quab.map <- quab.map + ylab("Latitude") 
+quab.map <- quab.map + labs(color = "Experiment Type") 
+
+quab.map <- quab.map + scale_color_manual(breaks = c("four", "two", "one", "sim"), 
+                                          values = c("darkblue", "darkorchid3", "darkred", "darkorange"), 
+                                          labels = c("Four-Week Delay", "Two-Week Delay", "One-Week Delay", "Simultaneous"))
+quab.map
+```
+
+#### Attacks on mimics and control across time-delayed experiments 
+
+```{r}
+# code to add attack rates to dataset 
+attack.rate <- (mim.data$attacks/500)*100
+mim.data$attack.rate <- attack.rate
+head(mim.data)
+```
+
+```{r}
+# subset out each experiment 
+four_weeks <- subset(mim.data, time.delay == "four", drop = FALSE) 
+two_weeks <- subset(mim.data, time.delay == "two", drop = FALSE) 
+one_week <- subset(mim.data, time.delay == "one", drop = FALSE) 
+simultaneous <- subset(mim.data, time.delay == "zero", drop = FALSE)
+```
+
+```{r}
+# four week experiment 
+four <- aggregate(x=four_weeks$attack.rate, by = list(four_weeks$species), FUN=sum)
+four
+
+lim4 <- subset(four_weeks, species == "limenitis", drop = FALSE)
+jun4 <- subset(four_weeks, species == "junonia", drop = FALSE)
+
+lim4.sd <- sd(lim4$attack.rate)
+jun4.sd <- sd(jun4$attack.rate)
+
+
+four <- data.frame(
+  Species = four$Group.1,
+  Attack.Rate = four$x,
+  sd = c(jun4.sd, lim4.sd)
+)
+four
+```
+
+```{r}
+f <- ggplot(four) 
+f <- f + geom_bar(aes(Species, Attack.Rate), stat = "identity", fill=c("grey27", "darkblue"), width = 0.5) 
+f <- f + ylim(0,3.5)
+f <- f + xlab("Species") 
+f <- f + ylab("Attack Rate")
+f <- f + scale_x_discrete(limits =  c("limenitis", "junonia"), 
+                          labels = c("limenitis" = "Mimic","junonia" = "Control"))
+f <- f + ggtitle(expression(bold("Four-Week Experiment") ))
+f <- f + geom_errorbar( aes(x=Species, ymin=Attack.Rate-sd, ymax=Attack.Rate+sd), width=0.4, size=1)
+four.fig <- f + theme( aspect.ratio = 4/3, plot.title = element_text(hjust = 0.5, size=20), axis.title = element_text(size = 15), axis.text = element_text(size = 15)) 
+
+four.fig
+```
+
+```{r}
+# two week experiment 
+two <- aggregate(x=two_weeks$attack.rate, by = list(two_weeks$species), FUN=sum)
+two
+
+lim2 <- subset(two_weeks, species == "limenitis", drop = FALSE)
+jun2 <- subset(two_weeks, species == "junonia", drop = FALSE)
+
+lim2.sd <- sd(lim2$attack.rate)
+jun2.sd <- sd(jun2$attack.rate)
+
+
+two <- data.frame(
+  Species = two$Group.1,
+  Attack.Rate = two$x,
+  sd = c(jun2.sd, lim2.sd)
+)
+two
+```
+
+```{r}
+t <- ggplot(two) 
+t <- t + geom_bar(aes(Species, Attack.Rate), stat = "identity", fill=c("grey27", "darkorchid3"), width = 0.5) 
+t <- t + ylim(0,3.5)
+t <- t + xlab("Species") 
+t <- t + ylab("Attack Rate")
+t <- t + scale_x_discrete(limits =  c("limenitis", "junonia"), 
+                          labels = c("limenitis" = "Mimic","junonia" = "Control"))
+t <- t + ggtitle(expression(bold("Two-Week Experiment") ))
+t <- t + geom_errorbar( aes(x=Species, ymin=Attack.Rate-sd, ymax=Attack.Rate+sd), width=0.4, size=1)
+two.fig <- t + theme( aspect.ratio = 4/3, plot.title = element_text(hjust = 0.5, size=20), axis.title = element_text(size = 15), axis.text = element_text(size = 15)) 
+
+two.fig
+```
+
+```{r}
+# one week experiment 
+one <- aggregate(x=one_week$attack.rate, by = list(one_week$species), FUN=sum)
+one
+
+lim1 <- subset(one_week, species == "limenitis", drop = FALSE)
+jun1 <- subset(one_week, species == "junonia", drop = FALSE)
+
+lim1.sd <- sd(lim1$attack.rate)
+jun1.sd <- sd(jun1$attack.rate)
+
+
+one <- data.frame(
+  Species = one$Group.1,
+  Attack.Rate = one$x,
+  sd = c(jun1.sd, lim1.sd)
+)
+one
+```
+
+```{r}
+o <- ggplot(one) 
+o <- o + geom_bar(aes(Species, Attack.Rate), stat = "identity", fill=c("grey27", "darkred"), width = 0.5) 
+o <- o + ylim(0,3.5)
+o <- o + xlab("Species") 
+o <- o + ylab("Attack Rate")
+o <- o + scale_x_discrete(limits =  c("limenitis", "junonia"), 
+                          labels = c("limenitis" = "Mimic","junonia" = "Control"))
+o <- o + ggtitle(expression(bold("One-Week Experiment") ))
+o <- o + geom_errorbar( aes(x=Species, ymin=Attack.Rate-sd, ymax=Attack.Rate+sd), width=0.4, size=1)
+one.fig <- o + theme( aspect.ratio = 4/3, plot.title = element_text(hjust = 0.5, size=20), axis.title = element_text(size = 15), axis.text = element_text(size = 15)) 
+
+one.fig
+```
+
+```{r}
+# simultaneous experiment 
+zero <- aggregate(x=simultaneous$attack.rate, by = list(simultaneous$species), FUN=sum)
+zero
+
+lim0 <- subset(simultaneous, species == "limenitis", drop = FALSE)
+jun0 <- subset(simultaneous, species == "junonia", drop = FALSE)
+
+lim0.sd <- sd(lim0$attack.rate)
+jun0.sd <- sd(jun0$attack.rate)
+
+
+zero <- data.frame(
+  Species = zero$Group.1,
+  Attack.Rate = zero$x,
+  sd = c(jun0.sd, lim0.sd)
+)
+zero
+```
+
+```{r}
+z <- ggplot(zero) 
+z <- z + geom_bar(aes(Species, Attack.Rate), stat = "identity", fill=c("grey27", "darkorange"), width = 0.5) 
+z <- z + ylim(0,3.5)
+z <- z + xlab("Species") 
+z <- z + ylab("Attack Rate")
+z <- z + scale_x_discrete(limits =  c("limenitis", "junonia"), 
+                          labels = c("limenitis" = "Mimic","junonia" = "Control"))
+z <- z + ggtitle(expression(bold("Simultaneous Experiment") ))
+z <- z + geom_errorbar( aes(x=Species, ymin=Attack.Rate-sd, ymax=Attack.Rate+sd), width=0.4, size=1)
+zero.fig <- z + theme( aspect.ratio = 4/3, plot.title = element_text(hjust = 0.5, size=20), axis.title = element_text(size = 15), axis.text = element_text(size = 15)) 
+
+zero.fig
+```
+
+```{r}
+fig = four.fig + two.fig + one.fig + zero.fig
+
+fig[[1]] = fig[[1]] + theme(axis.title.x = element_blank())
+
+fig[[2]] = fig[[2]] + theme(axis.text.y = element_blank(),
+                            axis.ticks.y = element_blank(),
+                            axis.title.y = element_blank(), 
+                            axis.title.x = element_blank())
+
+fig[[3]] = fig[[3]] + theme(axis.text.y = element_blank(),
+                            axis.ticks.y = element_blank(),
+                            axis.title.y = element_blank(), 
+                            axis.title.x = element_blank() )
+
+fig[[4]] = fig[[4]] + theme(axis.text.y = element_blank(),
+                            axis.ticks.y = element_blank(),
+                            axis.title.y = element_blank(), 
+                            axis.title.x = element_blank() )
+
+attack.fig <- fig + plot_layout(nrow=1)
+attack.fig
+```
+```{r}
+attack.fig / quab.map 
+```
+
+
+
+

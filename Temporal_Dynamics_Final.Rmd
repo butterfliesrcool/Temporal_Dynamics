@@ -1,0 +1,159 @@
+---
+title: "Temporal Dynamics of Predator Learning in a Batesian Mimicry Complex"
+author: "Abby Robinson"
+date: "12/16/2022"
+output: html_document
+---
+
+## [1] Did avian predators learn to avoid facsimiles of Battus philenor during 4-day experiments, compared to the undefended facsimiles of the control? {.tabset}
+
+In order to address how the time delay will affect attack rates on the mimics, we first need to show that our training experiment was effective and birds learned to avoid facsimilies of battus philenor. 
+
+I hypothesize that birds will learn to avoid the chemically defended models faster than the control, and that we will therefore see lower attack rates on the model in the last three days of the experiment compared to the control. 
+
+Because this initial question of the project is focused on the training phase of the experiment, each of the three time-delayed experiments (four, two, one) are essentially identical replicates of each other, and therefore this data can be pooled to increase power 
+
+Packages
+```{r}
+library(curl)
+library(ggplot2)
+library(lme4)
+library(DHARMa)
+library(emmeans)
+library("glmmTMB")
+library(patchwork)
+```
+
+```{r}
+m <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/Quabbin_Model_Data.csv")
+model <- read.csv(m, header = TRUE, sep = ",")
+head(model)
+```
+
+```{r}
+# make field.day variable factor
+class(model$field.day) 
+model$field.day <- as.factor(model$field.day)
+class(model$field.day)
+
+# make site variable factor 
+class(model$field.site)
+model$field.site <- as.factor(model$field.site)
+class(model$field.site)
+
+# make sure attack variable is integer 
+class(model$attacks) 
+
+# make species variable factor 
+class(model$species)
+model$species <- as.factor(model$species)
+class(model$species)
+
+# make treatment variable factor 
+class(model$treatment)
+model$treatment <- as.factor(model$treatment)
+class(model$treatment)
+```
+
+# make experimental.day variable factor 
+class(model$experiment.day) 
+count$experiment.day <- as.factor(count$experiment.day)
+class(count$experiment.day)
+
+```{r}
+# histogram of attacks 
+hist(count$attacks)  #concerns about zero inflation based on histogram? 
+
+# check variance and mean to assess for over /  under - dispersion 
+var(count$attacks)
+mean(count$attacks) # variance is greater than mean, which indicates that over-dispersion might be an issue 
+
+```
+
+```{r}
+mod5 <- glmmTMB(attacks ~ experiment.day*species + treatment*species + (1|field.site/field.day), data=count,ziformula=~1,family=poisson) 
+summary(mod5)
+check_singularity(mod5) 
+
+# no singularity issues 
+# no convergence issues 
+```
+
+```{r}
+mod5simulation <- simulateResiduals(fittedModel = mod5, plot = T)
+
+testUniformity(mod5simulation) 
+testOutliers(mod5simulation)
+testDispersion(mod5simulation) 
+testZeroInflation(mod5simulation) 
+```
+```{r}
+## MODEL 5
+post.hoc1 <- emmeans(mod5, pairwise ~ experiment.day|species) 
+
+# do I still need to do a bonferroni correction if I am no longer running "extra" pairwise comparisons 
+post.hoc1$contrasts %>%
+     rbind() # bonferroni adjustment for multiple comparisons 
+# bonferroni didn't change significance 
+```
+```{r}
+m <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/Quabbin_Mimic_Data.csv")
+mim.data <- read.csv(m, header = TRUE, sep = ",")
+head(mim.data)
+# count data looses some information that binomial data would provide, but binomial data would likely not work here due to the low overall attack rates 
+# survival analysis likely didn't work with this data because attack rates are too low for this data to be analyzed as binomial data 
+```
+
+```{r}
+# make experimental.day variable factor 
+class(mim.data$experiment.day) 
+mim.data$experiment.day <- as.factor(mim.data$experiment.day)
+class(mim.data$experiment.day)
+
+# make field.day variable factor
+class(mim.data$field.day) 
+mim.data$field.day <- as.factor(mim.data$field.day)
+class(mim.data$field.day)
+
+# make site variable factor 
+class(mim.data$field.site)
+mim.data$field.site <- as.factor(mim.data$field.site)
+class(mim.data$field.site)
+
+# make sure attack variable is integer 
+class(mim.data$attacks) # only thing that should be an integer 
+
+# make species variable factor 
+class(mim.data$species)
+mim.data$species <- as.factor(mim.data$species)
+class(mim.data$species)
+
+# make time.delay variable factor 
+class(mim.data$treatment)
+mim.data$treatment <- as.factor(mim.data$treatment)
+class(mim.data$treatment)
+```
+
+```{r}
+mod2 <- glmmTMB(attacks ~ species*treatment + (1|field.site) + (1|field.day), data=mim.data,ziformula=~1,family=poisson) 
+summary(mod2)
+check_singularity(mod2) 
+```
+```{r}
+mod3 <- glmmTMB(attacks ~ species*treatment + species*experiment.day + (1|field.site) + (1|field.day), data=mim.data,ziformula=~1,family=poisson) 
+summary(mod3)
+check_singularity(mod3) 
+```
+```{r}
+mod3simulation <- simulateResiduals(fittedModel = mod3, plot = T)
+testUniformity(mod3simulation) 
+testOutliers(mod3simulation)
+testDispersion(mod3simulation) 
+testZeroInflation(mod3simulation) 
+```
+```{r}
+post.hoc2 <- emmeans(mod3, pairwise ~ species|treatment)
+post.hoc3 <- emmeans(mod3, pairwise ~ experiment.day|species)
+```
+
+

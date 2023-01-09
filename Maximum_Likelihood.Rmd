@@ -1,0 +1,421 @@
+---
+title: "maximum.likelihood"
+author: "Abby Robinson"
+date: "2/19/2022"
+output: html_document
+---
+
+Maximum Likelihood Function 
+```{r}
+##i = attacks on facsimile of a specific phenotype 
+##jun = attacks on junonia 
+likelihood = function(i, jun, prob){
+  
+  (i * log(prob / (prob+1)) ) + (jun * log(1/ (prob+1)) ) 
+
+}
+
+```
+
+```{r}
+c <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/quabbin.count.csv")
+data <- read.csv(c, header = TRUE, sep = ",", stringsAsFactors = FALSE)
+data
+```
+```{r}
+sim <- subset(data, phase == "simultaneous", drop = FALSE)
+ba <- subset(sim, species == "battus", drop = FALSE)
+li <- subset(sim, species == "limenitis", drop = FALSE)
+ju <- subset(sim, species == "junonia", drop = FALSE)
+
+bl <- subset(sim, species %in% c("battus", "limenitis"), drop = FALSE)
+jl <- subset(sim, species %in% c("junonia", "limenitis"), drop = FALSE)
+bj <- subset(sim, species %in% c("battus", "junonia"), drop = FALSE)
+```
+
+```{r}
+
+glm4 <- glm(data = sim, attacks ~ species, family = "poisson")
+summary(glm4)
+
+glm.bl <- glm(data = bl, attacks ~ species, family = "poisson")
+summary(glm.bl)
+
+glm.jl <- glm(data = jl, attacks ~ species, family = "poisson")
+summary(glm.jl)
+
+glm.bj <- glm(data = bj, attacks ~ species, family = "poisson")
+summary(glm.bj)
+```
+
+```{r}
+learning <- subset(data, phase == "learning", drop = FALSE)
+testing <- subset(data, phase == "testing", drop = FALSE)
+simultaneous <- subset(data, phase == "simultaneous", drop = FALSE)
+learning.pld <- subset(learning, day %in% c(2,3,4), drop = FALSE)
+testing.pld <- subset(testing, day %in% c(2,3,4), drop = FALSE)
+```
+
+```{r}
+b <- subset(learning.pld, species == "battus", drop = FALSE)
+bj <- subset(learning.pld, species == "junonia", drop = FALSE)
+
+l <- subset(testing.pld, species == "limenitis", drop = FALSE)
+lj <- subset(testing.pld, species == "junonia", drop = FALSE)
+```
+
+likelihood for limenitis totals 
+```{r}
+l.sum <- sum(l$attacks)
+lim <- l$attacks
+
+lj.sum <- sum(lj$attacks)
+l.jun <- lj$attacks
+
+###maximum likelihood calculated for each species 
+#for the probability of attacking lim vs. jun: 
+
+prob.lj <- l.sum / (l.sum + lj.sum)
+prob.lj
+
+##likelihood scores for limenitis at each site for all four days
+lim.likelihood <- likelihood(lim, l.jun, prob.lj)
+li.like.score <- sum(lim.likelihood)
+li.like.score
+```
+
+Likelihood for battus totals 
+```{r}
+b.sum <- sum(b$attacks)
+bat <- b$attacks
+
+bj.sum <- sum(bj$attacks)
+b.jun <- bj$attacks
+
+###maximum likelihood calculated for each species 
+#for the probability of attacking bat vs. jun: 
+
+prob.bj <- b.sum / (b.sum + bj.sum)
+prob.bj
+
+##likelihood scores for battus at each site for all four days
+bat.likelihood <- likelihood(bat, b.jun, prob.bj)
+ba.like.score <- sum(bat.likelihood)
+ba.like.score
+```
+###My problem: the proportion of attack rates calculated for maximum likelihood does not translate into significance 
+
+```{r}
+##This is the likelihood ratio test to get significance level 
+DIFF <- abs(li.like.score - ba.like.score)
+DIFF 
+
+G <- DIFF*2
+G 
+
+p.value <- pchisq(G, 1, lower.tail = FALSE)
+p.value 
+
+##p-value = 6.286951e-06
+##bonferroni correction? 
+```
+
+```{r}
+pairwise.t.test(learning$attacks, learning$species, p.adjust.method="bonferroni")
+```
+
+
+****This analysis will show if there are any significant differences in day-to-day attack rates between the two species 
+l1 v b1
+```{r}
+l.one <- subset(l, day == "1", drop = FALSE)
+sum.l.one <- sum(l.one$attacks)
+l.one.attack <- l.one$attacks
+
+lj.one <- subset(lj, day == "1", drop = FALSE)
+sum.lj.one <- sum(lj.one$attacks)
+lj.one.attack <- lj.one$attacks
+
+###maximum likelihood calculated for each species 
+#for the probability of attacking lim vs. jun: 
+
+prob.lj.one <- sum.l.one / (sum.l.one + sum.lj.one)
+prob.lj.one
+
+##likelihood scores for limenitis at each site on day one 
+lim.one.likelihood <- likelihood(l.one.attack, lj.one.attack, prob.lj.one)
+li.one <- sum(lim.one.likelihood)
+li.one
+```
+
+```{r}
+b.one <- subset(b, day == "1", drop = FALSE)
+sum.b.one <- sum(b.one$attacks)
+b.one.attack <- b.one$attacks
+
+bj.one <- subset(bj, day == "1", drop = FALSE)
+sum.bj.one <- sum(bj.one$attacks)
+bj.one.attack <- bj.one$attacks
+
+###maximum likelihood calculated for each species 
+#for the probability of attacking bat vs. jun: 
+
+prob.bj.one <- sum.b.one / (sum.b.one + sum.bj.one)
+prob.bj.one
+
+##likelihood scores for battus at each site on day one
+bat.one.likelihood <- likelihood(b.one.attack, bj.one.attack, prob.bj.one)
+ba.one <- sum(bat.one.likelihood)
+ba.one
+```
+
+```{r}
+##This is the likelihood ratio test to get significance level 
+DIFF <- abs(li.one - ba.one)
+DIFF 
+
+G <- DIFF*2
+G 
+
+p.value <- pchisq(G, 1, lower.tail = FALSE )
+p.value 
+
+##p-value = 3.319921e-06
+##bonferroni correction? 
+##  I think the difference in sample sizes here is maybe messing uo the likelihood scores. 
+```
+
+####probability of birds attacking limenitis relative to junonia at transects 1, 2, 3, and the simultaneous experiment 
+
+```{r}
+l1 <- subset(l, transect == "1", drop = FALSE)
+lj1 <- subset(lj, transect == "1", drop = FALSE)
+
+l2 <- subset(l, transect == "2", drop = FALSE)
+lj2 <- subset(lj, transect == "2", drop = FALSE)
+
+l3 <- subset(l, transect == "3", drop = FALSE)
+lj3 <- subset(lj, transect == "3", drop = FALSE)
+
+sl <- subset(simultaneous, species == "limenitis", drop = FALSE)
+sj <- subset(simultaneous, species == "junonia", drop = FALSE)
+```
+
+```{r}
+l1.sum <- sum(l1$attacks)
+lim1 <- l1$attacks
+
+lj1.sum <- sum(lj1$attacks)
+jun1 <- lj1$attacks
+
+###maximum likelihood calculated for each species 
+#for the probability of attacking lim vs. jun: 
+
+prob1 <- l1.sum / (l1.sum + lj1.sum)
+prob1
+
+##likelihood scores for limenitis at each site for all four days
+l1.likelihood <- likelihood(lim1, jun1, prob1)
+l1.score <- sum(l1.likelihood )
+l1.score
+```
+
+```{r}
+l2.sum <- sum(l2$attacks)
+lim2 <- l2$attacks
+
+lj2.sum <- sum(lj2$attacks)
+jun2 <- lj2$attacks
+
+###maximum likelihood calculated for each species 
+#for the probability of attacking lim vs. jun: 
+
+prob2 <- l2.sum / (l2.sum + lj2.sum)
+prob2
+
+##likelihood scores for limenitis at each site for all four days
+l2.likelihood <- likelihood(lim2, jun2, prob2)
+l2.score <- sum(l2.likelihood )
+l2.score
+```
+
+```{r}
+l3.sum <- sum(l3$attacks)
+lim3 <- l3$attacks
+
+lj3.sum <- sum(lj3$attacks)
+jun3 <- lj3$attacks
+
+###maximum likelihood calculated for each species 
+#for the probability of attacking lim vs. jun: 
+
+prob3 <- l3.sum / (l3.sum + lj3.sum)
+prob3
+
+##likelihood scores for limenitis at each site for all four days
+l3.likelihood <- likelihood(lim3, jun3, prob3)
+l3.score <- sum(l3.likelihood )
+l3.score
+```
+
+```{r}
+sl.sum <- sum(sl$attacks)
+sim.lim <- sl$attacks
+
+sj.sum <- sum(sj$attacks)
+sim.jun <- sj$attacks
+
+###maximum likelihood calculated for each species 
+#for the probability of attacking lim vs. jun: 
+
+prob4 <- sl.sum / (sl.sum + sj.sum)
+prob4
+
+##likelihood scores for limenitis at each site for all four days
+l4.likelihood <- likelihood(sim.lim, sim.jun, prob4)
+l4.score <- sum(l4.likelihood )
+l4.score ###The low attack rate on limenitis is getting obscured by the high attack rate on junonia in this score 
+```
+
+```{r}
+##This is the likelihood ratio test to get significance level 
+DIFF <- abs(l1.score - l2.score)
+DIFF 
+
+G <- DIFF*2
+G 
+
+p.value <- pchisq(G, 1, lower.tail = FALSE)
+p.value 
+```
+
+```{r}
+##This is the likelihood ratio test to get significance level 
+DIFF <- abs(l1.score - l4.score)
+DIFF 
+
+G <- DIFF*2
+G 
+
+p.value <- pchisq(G, 1, lower.tail = FALSE)
+p.value 
+
+```
+
+```{r}
+##This is the likelihood ratio test to get significance level 
+DIFF <- abs(l2.score - l3.score)
+DIFF 
+
+G <- DIFF*2
+G 
+
+p.value <- pchisq(G, 1, lower.tail = FALSE)
+p.value 
+```
+
+```{r}
+##This is the likelihood ratio test to get significance level 
+DIFF <- abs(l1.score - l3.score)
+DIFF 
+
+G <- DIFF*2
+G 
+
+p.value <- pchisq(G, 1, lower.tail = FALSE)
+p.value 
+```
+
+```{r}
+##This is the likelihood ratio test to get significance level 
+DIFF <- abs(l2.score - l4.score)
+DIFF 
+
+G <- DIFF*2
+G 
+
+p.value <- pchisq(G, 1, lower.tail = FALSE)
+p.value 
+```
+
+```{r}
+##This is the likelihood ratio test to get significance level 
+DIFF <- abs(l3.score - l4.score)
+DIFF 
+
+G <- DIFF*2
+G 
+
+p.value <- pchisq(G, 1, lower.tail = FALSE)
+p.value 
+```
+
+Compare: 
+p-values without bonferroni correction: 
+
+l1 v l2  0.07987582
+l1 v l3  0.008397561
+l2 v l3  0.04888671
+
+l1 v l4 0.00401174
+l2 v l4 0.02244356
+l3 v l4 0.2484803
+
+attack rates on limenitis are not significantly different between transect 1 and transect 2, and between transect 3 and transect 4, but transects 1&2 are significantly different from transects 3&4
+###transect 3 might just be a little weird because it has a lower attack rate overall....
+
+####should I get a probability for all limenitis v. all junonia and compare individual transects to that probability? 
+
+```{r}
+mimic <- subset(data, phase %in% c("testing", "simultaneous"), drop = FALSE)
+
+limenitis <- subset(mimic, species == "limenitis", drop = FALSE)
+l <-sum(limenitis$attacks)
+
+junonia <- subset(mimic, species == "junonia", drop = FALSE)
+j <-sum(junonia$attacks)
+
+prob <- l / (l + j)
+prob
+```
+
+##I think the fact that our junonia counts vary for each comparison is fucking things up... 
+
+The probabilities make sense but the likelihood scores don't... it seems like the attack total at each comparison is too important, and attacks on limenitis are being scored basically the same as attacks on junonia, which doesn't make sense.... 
+
+Something that has a higher number of attacks overall is going to have a higher likelihood score
+
+Likelihood for battus totals 
+```{r}
+b4 <- subset(simultaneous, species == "battus", drop = FALSE)
+j4 <- subset(simultaneous, species == "junonia", drop = FALSE)
+
+b4.sum <- sum(b4$attacks)
+bat4 <- b4$attacks
+
+j4.sum <- sum(j4$attacks)
+jun4 <- j4$attacks
+
+###maximum likelihood calculated for each species 
+#for the probability of attacking bat vs. jun: 
+
+prob.bj4 <- b4.sum / (b4.sum + j4.sum)
+prob.bj4
+
+##likelihood scores for battus at each site for all four days
+bat4.likelihood <- likelihood(bat4, jun4, prob.bj4)
+b4.score <- sum(bat4.likelihood)
+b4.score
+```
+
+```{r}
+##This is the likelihood ratio test to get significance level 
+DIFF <- abs(b4.score - l4.score)
+DIFF 
+
+G <- DIFF*2
+G 
+
+p.value <- pchisq(G, 1, lower.tail = FALSE)
+p.value 
+```

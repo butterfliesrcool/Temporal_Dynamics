@@ -1,0 +1,277 @@
+---
+title: "PAVO"
+author: "Abby Robinson"
+date: "10/19/2022"
+output: html_document
+---
+
+```{r}
+library(curl)
+library(pavo)
+```
+
+###Making the data frame 
+```{r}
+p <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/spectral_reflectance_data.csv")
+specs <- read.csv(p, header = TRUE, sep = ",")
+specs <- subset(specs, wavelength >= 300 & wavelength <= 701, drop = FALSE)
+lim <- subset(specs, species == "limenitis", drop = FALSE) 
+bat <- subset(specs, species == "battus", drop = FALSE) 
+
+lim_real <- subset(lim, specimen.type == "real.wing", drop = FALSE) 
+  lim_real_1 <- subset(lim_real, sample.number == "2", drop = FALSE) 
+
+lim_fac <- subset(lim, specimen.type == "facsimiles", drop = FALSE) 
+  lim_fac_1 <- subset(lim_fac, sample.number == "1", drop = FALSE) 
+  lim_fac_2 <- subset(lim_fac, sample.number == "2", drop = FALSE) 
+  lim_fac_3 <- subset(lim_fac, sample.number == "3", drop = FALSE) 
+
+bat_real <- subset(bat, specimen.type == "real.wing", drop = FALSE) 
+    bat_real_1 <- subset(bat_real, sample.number == "1", drop = FALSE) 
+    
+bat_fac <- subset(bat, specimen.type == "facsimiles", drop = FALSE) 
+  bat_fac_1 <- subset(bat_fac, sample.number == "4", drop = FALSE) 
+  bat_fac_2 <- subset(bat_fac, sample.number == "5", drop = FALSE) 
+  bat_fac_3 <- subset(bat_fac, sample.number == "6", drop = FALSE) 
+  
+###################
+  
+lr <- subset(lim_real_1, select = c(wavelength, reflectance) )
+
+lf1 <- subset(lim_fac_1, select = c(wavelength, reflectance) )
+lf2 <- subset(lim_fac_2, select = c(wavelength, reflectance) )
+lf3 <- subset(lim_fac_3, select = c(wavelength, reflectance) )
+
+br <- subset(bat_real_1, select = c(wavelength, reflectance) )
+
+bf1 <- subset(bat_fac_1, select = c(wavelength, reflectance) )
+bf2 <- subset(bat_fac_2, select = c(wavelength, reflectance) )
+bf3 <- subset(bat_fac_3, select = c(wavelength, reflectance) )
+```
+
+
+```{r}
+
+# Convert to rspec object
+limreal <- as.rspec(lr)
+batreal <- as.rspec(br)
+###designed the facsimiles based on spectral reflectance from these individuals 
+
+limreal <- procspec(
+  limreal,
+  opt =  "smooth",
+  fixneg = "zero",
+  span = 0.25,
+  bins = 20
+)
+
+batreal <- procspec(
+  batreal,
+  opt =  "smooth",
+  fixneg = "zero",
+  span = 0.25,
+  bins = 20
+)
+
+limfac.1 <- as.rspec(lf1)
+limfac.2 <- as.rspec(lf2)
+limfac.3 <- as.rspec(lf3)
+
+batfac.1 <- as.rspec(bf1)
+batfac.2 <- as.rspec(bf2)
+batfac.3 <- as.rspec(bf3)
+
+summary(limreal, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
+summary(batreal, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
+summary(limfac.1, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
+summary(limfac.2, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
+summary(limfac.3, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
+summary(batfac.1, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
+summary(batfac.2, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
+summary(batfac.3, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
+```
+
+```{r}
+wl <- limreal$wl
+lim.real <- limreal$reflectance
+bat.real <- batreal$reflectance
+
+lim.fac.1 <- limfac.1$reflectance
+lim.fac.2 <- limfac.2$reflectance
+lim.fac.3 <- limfac.3$reflectance
+
+bat.fac.1 <- batfac.1$reflectance
+bat.fac.2 <- batfac.2$reflectance
+bat.fac.3 <- batfac.3$reflectance
+
+lim.fac <- cbind(wl, lim.fac.1, lim.fac.2, lim.fac.3)
+bat.fac <- cbind(wl, bat.fac.1, bat.fac.2, bat.fac.3)
+
+lim.fac <- as.rspec(lim.fac)
+bat.fac <- as.rspec(bat.fac)
+```
+
+
+```{r}
+mean.lim.fac <- aggspec(lim.fac, FUN = mean)
+mean.bat.fac <- aggspec(bat.fac, FUN = mean)
+
+lim.fac <- procspec(
+  mean.lim.fac,
+  opt =  "smooth",
+  fixneg = "zero",
+  span = 0.25,
+  bins = 20
+)
+
+bat.fac <- procspec(
+  mean.bat.fac,
+  opt =  "smooth",
+  fixneg = "zero",
+  span = 0.25,
+  bins = 20
+)
+
+lim.facsimile <- lim.fac$dat
+bat.facsimile <- bat.fac$dat
+
+specs <- cbind(wl, lim.real, bat.real, lim.facsimile, bat.facsimile )
+
+is.rspec(specs)
+specs <- as.rspec(specs)
+is.rspec(specs)
+specs
+
+summary(specs, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
+```
+
+```{r}
+par(mfrow = c(2, 2))
+peakshape(specs, plot = TRUE, lim = c(350, 600))
+```
+
+
+```{r}
+bluetit_sense <- sensdata(visual = "bluetit", achromatic = "bt.dc")
+head(bluetit_sense)
+tail(bluetit_sense)
+
+uv_sense <- sensdata(visual = "avg.uv", achromatic = "bt.dc")
+head(uv_sense)
+tail(uv_sense)
+
+v_sense <- sensdata(visual = "avg.v", achromatic = "bt.dc")
+head(v_sense)
+tail(v_sense)
+```
+
+
+```{r}
+vismodel <- vismodel(specs,
+  visual = "avg.v", achromatic = "ch.dc",
+  illum = "forestshade", relative = TRUE
+)
+vismodel.cd <- coldist(vismodel)
+vismodel.cd
+```
+
+Colour distances are obtained by weighting the Euclidean distance of the photoreceptor quantum catches by the Weber fraction of the cones (ΔS). These measurements are in units of Just Noticeable Differences (JNDs), where distances over a certain threshold (usually 1) are considered to be discernible under the conditions considered (e.g., backgrounds, illumination). 
+
+###Where dS is the chromatic contrast (ΔS) and dL is the achromatic contrast (ΔL). 
+
+```{r}
+specsmod.cd <- coldist(specsmod)
+```
+```{r}
+# Convert points to Cartesian coordinates in which Euclidean distances are 
+# noise-weighted.
+propxyz <- jnd2xyz(specsmod.cd)
+
+# Plot the floral spectra in 'noise-corrected' space
+plot(propxyz)
+```
+
+
+```{r}
+a <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/battus_real_wing_spectra.csv")
+bat.real <- read.csv(a, header = TRUE, sep = ",")
+bat.real <- subset(bat.real, wavelength >= 300 & wavelength <= 701, drop = FALSE)
+bat.real <- as.rspec(bat.real)
+bat.real <- procspec(
+  bat.real,
+  opt =  "smooth",
+  fixneg = "zero",
+  span = 0.25,
+  bins = 20
+)
+```
+
+```{r}
+b <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/battus_facsimile_spectra.csv")
+bat.fac <- read.csv(b, header = TRUE, sep = ",")
+bat.fac <- subset(bat.fac, wavelength >= 300 & wavelength <= 701, drop = FALSE)
+bat.fac <- as.rspec(bat.fac)
+bat.fac <- procspec(
+  bat.fac,
+  opt =  "smooth",
+  fixneg = "zero",
+  span = 0.25,
+  bins = 20
+)
+```
+
+```{r}
+c <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/limenitis_real_wing_spectra.csv")
+lim.real <- read.csv(c, header = TRUE, sep = ",")
+lim.real <- subset(lim.real, wavelength >= 300 & wavelength <= 701, drop = FALSE)
+lim.real <- as.rspec(lim.real)
+lim.real <- procspec(
+  lim.real,
+  opt =  "smooth",
+  fixneg = "zero",
+  span = 0.25,
+  bins = 20
+)
+```
+
+```{r}
+d <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/limenitis_facsimile_spectra.csv")
+lim.fac <- read.csv(d, header = TRUE, sep = ",")
+lim.fac <- subset(lim.fac, wavelength >= 300 & wavelength <= 701, drop = FALSE)
+lim.fac <- as.rspec(lim.fac)
+lim.fac <- procspec(
+  lim.fac,
+  opt =  "smooth",
+  fixneg = "zero",
+  span = 0.25,
+  bins = 20
+)
+```
+
+```{r}
+wl <- bat.real$wl
+bat.real <- bat.real$reflectance
+lim.real <- lim.real$reflectance
+bat.fac <- bat.fac$reflectance
+lim.fac <- lim.fac$reflectance
+
+specs <- cbind(wl, bat.real, lim.real, bat.fac, lim.fac)
+specs <- as.rspec(specs)
+
+summary(specs, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
+```
+```{r}
+par(mfrow = c(2, 2))
+peakshape(specs, plot = TRUE, lim = c(350, 700))
+```
+```{r}
+vismodel <- vismodel(specs,
+  visual = "avg.v", achromatic = "ch.dc",
+  illum = "D65", relative = TRUE
+)
+vismodel.cd <- coldist(vismodel)
+vismodel.cd
+```
+```
+
+

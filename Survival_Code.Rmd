@@ -1,0 +1,146 @@
+---
+title: "survival"
+author: "Abby Robinson"
+date: "2/23/2022"
+output: html_document
+---
+
+```{r}
+library(curl)
+```
+
+```{r}
+c <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/learning-phase-transect-one.csv")
+l1  <- read.csv(c, header = TRUE, sep = ",", stringsAsFactors = FALSE)
+head(l1) #we can use the head function to view the first 10 rows in the dataset 
+length(l1$attacks)
+sum(l1$attacks)
+```
+
+```{r}
+t1 <- rep(1, each=4000)
+l1$transect <- t1
+head(l1)
+```
+
+```{r}
+r <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/learning-phase-transect-two.csv")
+l2  <- read.csv(r, header = TRUE, sep = ",", stringsAsFactors = FALSE)
+head(l2) #we can use the head function to view the first 10 rows in the dataset 
+length(l2$attacks)
+sum(l2$attacks)
+```
+
+```{r}
+t2 <- rep(2, each=4000)
+l2$transect <- t2
+head(l2)
+```
+
+```{r}
+p <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/learning-phase-transect-three.csv")
+l3  <- read.csv(p, header = TRUE, sep = ",", stringsAsFactors = FALSE)
+head(l3) #we can use the head function to view the first 10 rows in the dataset 
+length(l3$attacks)
+sum(l3$attacks)
+```
+
+```{r}
+t3 <- rep(3, each=4000)
+l3$transect <- t3
+head(l3)
+```
+
+```{r}
+f <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/day.five.learning.csv")
+five <- read.csv(f, header = TRUE, sep = ",", stringsAsFactors = FALSE)
+head(five) 
+sum(five$attacks)
+```
+
+```{r}
+learning.surv <- rbind(l1, l2, l3, five)
+length(learning$attacks)
+sum(learning$attacks)
+```
+
+```{r}
+library(survival)
+library(survminer)
+library(ggplot2)
+```
+
+```{r}
+model <- survfit(Surv(day, day+1, attacks) ~ species, data=learning.surv)
+model
+summary(model)
+plot(model, xlim=c(1, 6), ylim=c(0.97, 1.0), xmax = 6, col= c("black", "grey"), lwd=6)
+```
+```{r}
+a <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/testing-phase-transect-one.csv")
+te1  <- read.csv(a, header = TRUE, sep = ",", stringsAsFactors = FALSE)
+head(te1) #we can use the head function to view the first 10 rows in the dataset 
+length(te1$attacks)
+sum(te1$attacks)
+```
+
+```{r}
+tt1 <- rep(1, each=4000)
+te1$transect <- tt1
+head(te1)
+```
+
+```{r}
+h <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/testing-phase-transect-two.csv")
+te2  <- read.csv(h, header = TRUE, sep = ",", stringsAsFactors = FALSE)
+head(te2) #we can use the head function to view the first 10 rows in the dataset 
+length(te2$attacks)
+sum(te2$attacks)
+```
+
+```{r}
+tt2 <- rep(2, each=4000)
+te2$transect <- tt2
+head(te2)
+```
+
+```{r}
+w <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/testing-phase-transect-three.csv")
+te3  <- read.csv(w, header = TRUE, sep = ",", stringsAsFactors = FALSE)
+head(te3) #we can use the head function to view the first 10 rows in the dataset 
+length(te3$attacks)
+sum(te3$attacks)
+```
+
+```{r}
+tt3 <- rep(3, each=4000)
+te3$transect <- tt3
+head(te3)
+```
+
+```{r}
+r <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/day.five.testing.csv")
+five.testing <- read.csv(r, header = TRUE, sep = ",", stringsAsFactors = FALSE)
+```
+
+```{r}
+testing.surv <- rbind(te1, te2, te3, five.testing )
+length(testing.surv$attacks)
+sum(testing.surv$attacks)
+```
+
+```{r}
+surv <- rbind(learning.surv, testing.surv)
+model3 <- survfit(Surv(day, day+1, attacks) ~ species, data=surv)
+plot(model3, xlim=c(1, 6), ylim=c(0.97, 1.0), xmax = 6, col= c("sienna4", "deepskyblue", "hotpink", "darkgreen"), lwd=5)
+```
+
+
+
+```{r}
+model2 <- survfit(Surv(day, day+1, attacks) ~ species, data=testing.surv)
+model2
+summary(model2)
+
+plot(model2, xlim=c(1, 6), ylim=c(0.97, 1.0), xmax = 6, col= c("sienna4", "deepskyblue"), lwd=5)
+```
