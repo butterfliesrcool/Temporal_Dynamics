@@ -4,201 +4,186 @@ author: "Abby Robinson"
 date: "10/19/2022"
 output: html_document
 ---
+# PAVO Analyses for Temporal Dynamics Project 
+
+Load required packages 
 
 ```{r}
 library(curl)
 library(pavo)
+library(dbplyr)
 ```
 
-###Making the data frame 
-```{r}
-p <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/spectral_reflectance_data.csv")
-specs <- read.csv(p, header = TRUE, sep = ",")
-specs <- subset(specs, wavelength >= 300 & wavelength <= 701, drop = FALSE)
-lim <- subset(specs, species == "limenitis", drop = FALSE) 
-bat <- subset(specs, species == "battus", drop = FALSE) 
+## Limenitis (mimic): Dorsal Hindwing Blue Patch {.tabset}
 
-lim_real <- subset(lim, specimen.type == "real.wing", drop = FALSE) 
-  lim_real_1 <- subset(lim_real, sample.number == "2", drop = FALSE) 
-
-lim_fac <- subset(lim, specimen.type == "facsimiles", drop = FALSE) 
-  lim_fac_1 <- subset(lim_fac, sample.number == "1", drop = FALSE) 
-  lim_fac_2 <- subset(lim_fac, sample.number == "2", drop = FALSE) 
-  lim_fac_3 <- subset(lim_fac, sample.number == "3", drop = FALSE) 
-
-bat_real <- subset(bat, specimen.type == "real.wing", drop = FALSE) 
-    bat_real_1 <- subset(bat_real, sample.number == "1", drop = FALSE) 
-    
-bat_fac <- subset(bat, specimen.type == "facsimiles", drop = FALSE) 
-  bat_fac_1 <- subset(bat_fac, sample.number == "4", drop = FALSE) 
-  bat_fac_2 <- subset(bat_fac, sample.number == "5", drop = FALSE) 
-  bat_fac_3 <- subset(bat_fac, sample.number == "6", drop = FALSE) 
-  
-###################
-  
-lr <- subset(lim_real_1, select = c(wavelength, reflectance) )
-
-lf1 <- subset(lim_fac_1, select = c(wavelength, reflectance) )
-lf2 <- subset(lim_fac_2, select = c(wavelength, reflectance) )
-lf3 <- subset(lim_fac_3, select = c(wavelength, reflectance) )
-
-br <- subset(bat_real_1, select = c(wavelength, reflectance) )
-
-bf1 <- subset(bat_fac_1, select = c(wavelength, reflectance) )
-bf2 <- subset(bat_fac_2, select = c(wavelength, reflectance) )
-bf3 <- subset(bat_fac_3, select = c(wavelength, reflectance) )
-```
-
+### Dorsal hindwing blue spectra data for real wings for limenitis arthemis 
 
 ```{r}
+r <- curl("https://raw.githubusercontent.com/butterfliesrcool/Temporal_Dynamics/main/Limenitis_Real_HW_Blue.csv")
+real_lim_HW_blue <- read.csv(r, header = TRUE, sep = ",")
 
-# Convert to rspec object
-limreal <- as.rspec(lr)
-batreal <- as.rspec(br)
-###designed the facsimiles based on spectral reflectance from these individuals 
+# convert CSV to rspec object
+real_lim_HW_blue.rspec <- as.rspec(real_lim_HW_blue)
 
-limreal <- procspec(
-  limreal,
+
+#smooth spectra plots 
+real_lim_HW_blue.prspec <- procspec(
+  real_lim_HW_blue.rspec,
   opt =  "smooth",
   fixneg = "zero",
   span = 0.25,
   bins = 20
 )
+```
 
-batreal <- procspec(
-  batreal,
+```{r}
+explorespec(real_lim_HW_blue.prspec)
+plot(real_lim_HW_blue.prspec)
+```
+
+```{r}
+mean.real_lim_HW_blue.prspec <- aggspec(real_lim_HW_blue.prspec, FUN = mean)
+summary(mean.real_lim_HW_blue.prspec)
+```
+
+### Dorsal hindwing blue spectra data for limenitis arthemis facsimiles
+
+```{r}
+p <- curl("https://raw.githubusercontent.com/butterfliesrcool/Temporal_Dynamics/main/Limenitis_Facsimile_HW_Blue.csv")
+fac_lim_HW_blue <- read.csv(p, header = TRUE, sep = ",")
+
+# convert CSV to rspec object
+fac_lim_HW_blue.rspec <- as.rspec(fac_lim_HW_blue)
+
+
+#smooth spectra plots 
+fac_lim_HW_blue.prspec <- procspec(
+  fac_lim_HW_blue.rspec,
   opt =  "smooth",
   fixneg = "zero",
   span = 0.25,
   bins = 20
 )
-
-limfac.1 <- as.rspec(lf1)
-limfac.2 <- as.rspec(lf2)
-limfac.3 <- as.rspec(lf3)
-
-batfac.1 <- as.rspec(bf1)
-batfac.2 <- as.rspec(bf2)
-batfac.3 <- as.rspec(bf3)
-
-summary(limreal, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
-summary(batreal, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
-summary(limfac.1, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
-summary(limfac.2, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
-summary(limfac.3, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
-summary(batfac.1, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
-summary(batfac.2, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
-summary(batfac.3, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
 ```
 
 ```{r}
-wl <- limreal$wl
-lim.real <- limreal$reflectance
-bat.real <- batreal$reflectance
-
-lim.fac.1 <- limfac.1$reflectance
-lim.fac.2 <- limfac.2$reflectance
-lim.fac.3 <- limfac.3$reflectance
-
-bat.fac.1 <- batfac.1$reflectance
-bat.fac.2 <- batfac.2$reflectance
-bat.fac.3 <- batfac.3$reflectance
-
-lim.fac <- cbind(wl, lim.fac.1, lim.fac.2, lim.fac.3)
-bat.fac <- cbind(wl, bat.fac.1, bat.fac.2, bat.fac.3)
-
-lim.fac <- as.rspec(lim.fac)
-bat.fac <- as.rspec(bat.fac)
-```
-
-
-```{r}
-mean.lim.fac <- aggspec(lim.fac, FUN = mean)
-mean.bat.fac <- aggspec(bat.fac, FUN = mean)
-
-lim.fac <- procspec(
-  mean.lim.fac,
-  opt =  "smooth",
-  fixneg = "zero",
-  span = 0.25,
-  bins = 20
-)
-
-bat.fac <- procspec(
-  mean.bat.fac,
-  opt =  "smooth",
-  fixneg = "zero",
-  span = 0.25,
-  bins = 20
-)
-
-lim.facsimile <- lim.fac$dat
-bat.facsimile <- bat.fac$dat
-
-specs <- cbind(wl, lim.real, bat.real, lim.facsimile, bat.facsimile )
-
-is.rspec(specs)
-specs <- as.rspec(specs)
-is.rspec(specs)
-specs
-
-summary(specs, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
+explorespec(fac_lim_HW_blue.prspec)
+plot(fac_lim_HW_blue.prspec)
 ```
 
 ```{r}
-par(mfrow = c(2, 2))
-peakshape(specs, plot = TRUE, lim = c(350, 600))
+mean.fac_lim_HW_blue.prspec <- aggspec(fac_lim_HW_blue.prspec, FUN = mean)
+summary(mean.fac_lim_HW_blue.prspec)
 ```
 
+### Plot comparing real wing and facsimile data for Limenitis hindwing blue patch 
 
 ```{r}
-bluetit_sense <- sensdata(visual = "bluetit", achromatic = "bt.dc")
-head(bluetit_sense)
-tail(bluetit_sense)
+limenitis_HW_blue <- cbind(mean.real_lim_HW_blue.prspec, mean.fac_lim_HW_blue.prspec$dat)
+limenitis_HW_blue$Wavelength <- limenitis_HW_blue$wl
+limenitis_HW_blue$Real <- limenitis_HW_blue$dat
+limenitis_HW_blue$Facsimile <- limenitis_HW_blue$`mean.fac_lim_HW_blue.prspec$dat`
+limenitis_HW_blue <- subset(limenitis_HW_blue, select = c("Wavelength", "Real", "Facsimile"))
+limenitis_HW_blue
 
-uv_sense <- sensdata(visual = "avg.uv", achromatic = "bt.dc")
-head(uv_sense)
-tail(uv_sense)
-
-v_sense <- sensdata(visual = "avg.v", achromatic = "bt.dc")
-head(v_sense)
-tail(v_sense)
+limenitis_HW_blue.rspec <- as.rspec(limenitis_HW_blue)
+limHWB_plot <- plot(limenitis_HW_blue.rspec, ylim = c(0, 50), lty = 1:2, col = c("black", "blue"), lwd = 2)
+limHWB_plot
 ```
 
+### Combining fac and real data into one dataset for alternative analysis 
+
+I want to try running the data through the vismodel before aggregating & and calculating the means to see if it is able to account for intra-species variation when generating JND scores 
 
 ```{r}
-vismodel <- vismodel(specs,
-  visual = "avg.v", achromatic = "ch.dc",
-  illum = "forestshade", relative = TRUE
-)
-vismodel.cd <- coldist(vismodel)
-vismodel.cd
+lim_HWB <- merge(real_lim_HW_blue.prspec, fac_lim_HW_blue.prspec, by = "wl")
+specs.fac <- subset(lim_HWB, subset = "fac") # subset function in pavo package allows you to subset out columns that contain the string "fac", which allows you to isolate all 10 facsimiles samples 
+summary(lim_HWB, subset = c("B1", "B2", "B3", "H1"))
+
+# extract first component of filenames containing species names
+type <- do.call(rbind, strsplit(names(lim_HWB), "_"))[, 1]
+lim_HWB_fac <- subset(lim_HWB, subset = type == "fac")
+lim_HWB_real <- subset(lim_HWB, subset = type == "real")
 ```
+
+```{r}
+par(mfrow = c(1, 2))
+
+lim_HWB <- merge(real_lim_HW_blue.prspec, fac_lim_HW_blue.prspec, by = "wl")
+type <- do.call(rbind, strsplit(names(lim_HWB), "_"))[, 1]
+
+# Plot using median and standard deviation, default colours
+lim_HWB_plot <- aggplot(lim_HWB, type, 
+        FUN.center = median, 
+        ylim = c(0, 50),
+        alpha = 0.3, 
+        lty = 1:2, 
+        lcol = c("darkblue", "darkred"), 
+        shadecol = c("darkblue", "darkred"),
+        lwd = 2, 
+        legend = FALSE)
+
+legend(440, 9, legend=c("Real Wings", "Facsimile"),
+       col=c("darkblue", "darkred"), lty=1:2, lwd = 2, box.lty=0)
+text(600, 50, "JND = 0.69")
+
+
+bat_HWB <- merge(real_bat_HW_blue.prspec, fac_bat_HW_blue.prspec, by = "wl")
+bat_HWB$real_1 <- bat_HWB$percent_reflectance
+library(dplyr)
+# Remove columns using select()
+bat_HWB <- bat_HWB %>% select(-c(percent_reflectance))
+type <- do.call(rbind, strsplit(names(bat_HWB), "_"))[, 1]
+
+
+# Plot using median and standard deviation, default colours
+bat_HWB_plot <- aggplot(bat_HWB, type, 
+        FUN.center = median, 
+        ylim = c(0, 50),
+        alpha = 0.3, 
+        lty = 2:1, 
+        lcol = c("darkred", "darkblue"), 
+        shadecol = c("darkred", "darkblue"),
+        lwd = 2, 
+        legend = FALSE)
+
+legend(440, 9, legend=c("Real Wings", "Facsimile"),
+       col=c("darkblue", "darkred"), lty=1:2, lwd = 2, box.lty=0)
+text(600, 50, "JND = 1.43")
+```
+
+### Calculation of JNDs for Limenitis hindwing blue patch 
 
 Colour distances are obtained by weighting the Euclidean distance of the photoreceptor quantum catches by the Weber fraction of the cones (ΔS). These measurements are in units of Just Noticeable Differences (JNDs), where distances over a certain threshold (usually 1) are considered to be discernible under the conditions considered (e.g., backgrounds, illumination). 
 
-###Where dS is the chromatic contrast (ΔS) and dL is the achromatic contrast (ΔL). 
-
 ```{r}
-specsmod.cd <- coldist(specsmod)
-```
-```{r}
-# Convert points to Cartesian coordinates in which Euclidean distances are 
-# noise-weighted.
-propxyz <- jnd2xyz(specsmod.cd)
-
-# Plot the floral spectra in 'noise-corrected' space
-plot(propxyz)
+# Evan Code 
+vis.model <- vismodel(rspecdata = limenitis_HW_blue.rspec, visual = 'bluetit', illum = 'bluesky', trans = 'bluetit', qcatch = 'fi', bkg = 'green', vonkries = TRUE)
+vis.model
+JND <- coldist(vis.model,noise = 'neural', n = c(0.37, 0.71, 0.99, 1.0)) 
+JND
+# Warning: Quantum catch are relative, distances may not be meaningful 
 ```
 
+## Battus (model): Dorsal Hindwing Blue Patch {.tabset}
+
+### Dorsal hindwing blue spectra data for real wings for battus philenor
 
 ```{r}
-a <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/battus_real_wing_spectra.csv")
-bat.real <- read.csv(a, header = TRUE, sep = ",")
-bat.real <- subset(bat.real, wavelength >= 300 & wavelength <= 701, drop = FALSE)
-bat.real <- as.rspec(bat.real)
-bat.real <- procspec(
-  bat.real,
+t <- curl("https://raw.githubusercontent.com/butterfliesrcool/Temporal_Dynamics/main/Battus_Real_HW_Blue.csv")
+real_bat_HW_blue <- read.csv(t, header = TRUE, sep = ",")
+Percent_Reflectance <- (real_bat_HW_blue$reflectance)*100
+real_bat_HW_blue$percent_reflectance <- Percent_Reflectance
+real_bat_HW_blue <- subset(real_bat_HW_blue, select = c("wavelength", "percent_reflectance"))
+real_bat_HW_blue
+
+# convert CSV to rspec object
+real_bat_HW_blue.rspec <- as.rspec(real_bat_HW_blue)
+
+
+#smooth spectra plots 
+real_bat_HW_blue.prspec <- procspec(
+  real_bat_HW_blue.rspec,
   opt =  "smooth",
   fixneg = "zero",
   span = 0.25,
@@ -207,12 +192,23 @@ bat.real <- procspec(
 ```
 
 ```{r}
-b <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/battus_facsimile_spectra.csv")
-bat.fac <- read.csv(b, header = TRUE, sep = ",")
-bat.fac <- subset(bat.fac, wavelength >= 300 & wavelength <= 701, drop = FALSE)
-bat.fac <- as.rspec(bat.fac)
-bat.fac <- procspec(
-  bat.fac,
+explorespec(real_bat_HW_blue.prspec)
+plot(real_bat_HW_blue.prspec)
+```
+
+### Dorsal hindwing blue spectra data for battus philenor facsimiles
+
+```{r}
+g <- curl("https://raw.githubusercontent.com/butterfliesrcool/Temporal_Dynamics/main/Battus_Facsimile_HW_Blue.csv")
+fac_bat_HW_blue <- read.csv(g, header = TRUE, sep = ",")
+
+# convert CSV to rspec object
+fac_bat_HW_blue.rspec <- as.rspec(fac_bat_HW_blue)
+
+
+#smooth spectra plots 
+fac_bat_HW_blue.prspec <- procspec(
+  fac_bat_HW_blue.rspec,
   opt =  "smooth",
   fixneg = "zero",
   span = 0.25,
@@ -221,12 +217,125 @@ bat.fac <- procspec(
 ```
 
 ```{r}
-c <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/limenitis_real_wing_spectra.csv")
-lim.real <- read.csv(c, header = TRUE, sep = ",")
-lim.real <- subset(lim.real, wavelength >= 300 & wavelength <= 701, drop = FALSE)
-lim.real <- as.rspec(lim.real)
-lim.real <- procspec(
-  lim.real,
+explorespec(fac_bat_HW_blue.prspec)
+plot(fac_bat_HW_blue.prspec)
+```
+
+```{r}
+mean.fac_bat_HW_blue.prspec <- aggspec(fac_bat_HW_blue.prspec, FUN = mean)
+summary(mean.fac_bat_HW_blue.prspec)
+```
+
+### Plot comparing real wing and facsimile data for Limenitis hindwing blue patch 
+
+```{r}
+battus_HW_blue <- cbind(real_bat_HW_blue.prspec, mean.fac_bat_HW_blue.prspec$dat)
+battus_HW_blue$Wavelength <- battus_HW_blue$wl
+battus_HW_blue$Real <- battus_HW_blue$percent_reflectance
+battus_HW_blue$Facsimile <- battus_HW_blue$`mean.fac_bat_HW_blue.prspec$dat`
+battus_HW_blue <- subset(battus_HW_blue, select = c("Wavelength", "Real", "Facsimile"))
+battus_HW_blue
+
+battus_HW_blue.rspec <- as.rspec(battus_HW_blue)
+batHWB_plot <- plot(battus_HW_blue.rspec, ylim = c(0, 50), lty = 1:2, col = c("black", "blue"), lwd = 2)
+batHWB_plot
+```
+
+### Combining fac and real data into one dataset for alternative analysis 
+
+I want to try running the data through the vismodel before aggregating & and calculating the means to see if it is able to account for intra-species variation when generating JND scores 
+
+```{r}
+bat_HWB <- merge(real_bat_HW_blue.prspec, fac_bat_HW_blue.prspec, by = "wl")
+bat_HWB$real_1 <- bat_HWB$percent_reflectance
+
+library(dplyr)
+# Remove columns using select()
+bat_HWB <- bat_HWB %>% select(-c(percent_reflectance))
+
+specs.fac <- subset(bat_HWB, subset = "fac") # subset function in pavo package allows you to subset out columns that contain the string "fac", which allows you to isolate all 10 facsimiles samples 
+
+# extract first component of filenames containing species names
+type <- do.call(rbind, strsplit(names(bat_HWB), "_"))[, 1]
+bat_HWB_fac <- subset(bat_HWB, subset = type == "fac")
+bat_HWB_real <- subset(bat_HWB, subset = type == "real")
+```
+
+```{r}
+par(mfrow = c(2, 1))
+
+# Plot using median and standard deviation, default colours
+bat_HWB_plot <- aggplot(bat_HWB, type, 
+        FUN.center = median, 
+        ylim = c(0, 50),
+        alpha = 0.3, 
+        lty = 1:2, 
+        lcol = c("darkblue", "darkred"), 
+        shadecol = c("darkblue", "darkred"),
+        lwd = 2, 
+        legend = FALSE)
+
+legend(300, 50, legend=c("Real Wing", "Facsimile"),
+       col=c("darkblue", "darkred"), lty=1:2, lwd = 2, box.lty=0)
+text(650, 46, "JND = 1.43")
+
+```
+```{r}
+library(patchwork)
+
+figure = bat_HWB_plot + lim_HWB_plot
+figure
+```
+
+
+### Calculation of JNDs for Battus hindwing blue patch 
+
+Colour distances are obtained by weighting the Euclidean distance of the photoreceptor quantum catches by the Weber fraction of the cones (ΔS). These measurements are in units of Just Noticeable Differences (JNDs), where distances over a certain threshold (usually 1) are considered to be discernible under the conditions considered (e.g., backgrounds, illumination). 
+
+```{r}
+# Evan Code 
+vis.model2 <- vismodel(rspecdata = battus_HW_blue.rspec, visual = 'bluetit', illum = 'bluesky', trans = 'bluetit', qcatch = 'fi', bkg = 'green', vonkries = TRUE)
+vis.model2
+JND2 <- coldist(vis.model2,noise = 'neural', n = c(0.37, 0.71, 0.99, 1.0)) 
+JND2
+# Warning: Quantum catch are relative, distances may not be meaningful 
+```
+
+
+
+
+
+
+
+# OLD CODE: 
+```{r}
+vismodel_limHWB <- vismodel(limenitis_HW_blue.rspec, 
+                            qcatch = "fi",
+                            visual = "avg.uv",
+                            achromatic = "bt.dc",
+                            illum = "bluesky",
+                            vonkries = T, scale = 30, bkg = "green",
+                            relative = TRUE)
+vismodel_limHWB
+summary(vismodel_limHWB)
+vismodel_limHWB_JND <- coldist(vismodel_limHWB)
+vismodel_limHWB_JND
+```
+## Limenitis (mimic): Dorsal Forewing Black Patch {.tabset}
+
+### Dorsal forewing black spectra data for real wings for limenitis arthemis 
+
+```{r}
+b <- curl("https://raw.githubusercontent.com/butterfliesrcool/Temporal_Dynamics/main/Limenitis_Real_FW_Black.csv")
+real_lim_FW_black <- read.csv(b, header = TRUE, sep = ",")
+
+# convert CSV to rspec object
+real_lim_FW_black.rspec <- as.rspec(real_lim_FW_black)
+
+
+#smooth spectra plots 
+real_lim_FW_black.prspec <- procspec(
+  real_lim_FW_black.rspec,
   opt =  "smooth",
   fixneg = "zero",
   span = 0.25,
@@ -235,12 +344,28 @@ lim.real <- procspec(
 ```
 
 ```{r}
-d <- curl("https://raw.githubusercontent.com/butterfliesrcool/Quabbin_Data/main/limenitis_facsimile_spectra.csv")
-lim.fac <- read.csv(d, header = TRUE, sep = ",")
-lim.fac <- subset(lim.fac, wavelength >= 300 & wavelength <= 701, drop = FALSE)
-lim.fac <- as.rspec(lim.fac)
-lim.fac <- procspec(
-  lim.fac,
+explorespec(real_lim_FW_black.prspec)
+plot(real_lim_FW_black.prspec)
+```
+
+```{r}
+mean.real_lim_FW_black.prspec <- aggspec(real_lim_FW_black.prspec, FUN = mean)
+summary(mean.real_lim_FW_black.prspec)
+```
+
+### Dorsal forewing black spectra data for limenitis arthemis facsimiles
+
+```{r}
+s <- curl("https://raw.githubusercontent.com/butterfliesrcool/Temporal_Dynamics/main/Limenitis_Facsimile_FW_Black.csv")
+fac_lim_FW_black <- read.csv(s, header = TRUE, sep = ",")
+
+# convert CSV to rspec object
+fac_lim_FW_black.rspec <- as.rspec(fac_lim_FW_black)
+
+
+#smooth spectra plots 
+fac_lim_FW_black.prspec <- procspec(
+  fac_lim_FW_black.rspec,
   opt =  "smooth",
   fixneg = "zero",
   span = 0.25,
@@ -249,29 +374,70 @@ lim.fac <- procspec(
 ```
 
 ```{r}
-wl <- bat.real$wl
-bat.real <- bat.real$reflectance
-lim.real <- lim.real$reflectance
-bat.fac <- bat.fac$reflectance
-lim.fac <- lim.fac$reflectance
-
-specs <- cbind(wl, bat.real, lim.real, bat.fac, lim.fac)
-specs <- as.rspec(specs)
-
-summary(specs, subset = c('B1', 'B2', 'B3', 'H1', 'H2', 'H3'))
+explorespec(fac_lim_FW_black.prspec)
+plot(fac_lim_FW_black.prspec)
 ```
+
 ```{r}
-par(mfrow = c(2, 2))
-peakshape(specs, plot = TRUE, lim = c(350, 700))
-```
-```{r}
-vismodel <- vismodel(specs,
-  visual = "avg.v", achromatic = "ch.dc",
-  illum = "D65", relative = TRUE
-)
-vismodel.cd <- coldist(vismodel)
-vismodel.cd
-```
+mean.fac_lim_FW_black.prspec <- aggspec(fac_lim_FW_black.prspec, FUN = mean)
+summary(mean.fac_lim_FW_black.prspec)
 ```
 
+### Plot comparing real wing and facsimile data for Limenitis forewing black patch 
+
+```{r}
+limenitis_FW_black <- cbind(mean.real_lim_FW_black.prspec, mean.fac_lim_FW_black.prspec$dat)
+limenitis_FW_black$Wavelength <- limenitis_FW_black$wl
+limenitis_FW_black$Real <- limenitis_FW_black$dat
+limenitis_FW_black$Facsimile <- limenitis_FW_black$`mean.fac_lim_FW_black.prspec$dat`
+limenitis_FW_black <- subset(limenitis_FW_black, select = c("Wavelength", "Real", "Facsimile"))
+limenitis_FW_black
+
+limenitis_FW_black.rspec <- as.rspec(limenitis_FW_black)
+limFWBk_plot <- plot(limenitis_FW_black.rspec, ylim = c(0, 50), lty = 1:2, col = c("black", "blue"), lwd = 2)
+limFWBk_plot
+```
+
+```{r}
+lim_FWBk <- merge(real_lim_FW_black.prspec, fac_lim_FW_black.prspec, by = "wl")
+specs.fac <- subset(lim_FWBk, subset = "fac") # subset function in pavo package allows you to subset out columns that contain the string "fac", which allows you to isolate all 10 facsimiles samples 
+lim_FWBk_fixneg <- procspec(lim_FWBk, fixneg = "zero")
+summary(lim_FWBk_fixneg, subset = c("B1", "B2", "B3", "H1"))
+
+# extract first component of filenames containing species names
+type <- do.call(rbind, strsplit(names(lim_FWBk_fixneg), "_"))[, 1]
+lim_FWBk_fac <- subset(lim_FWBk_fixneg, subset = type == "fac")
+lim_FWBk_real <- subset(lim_FWBk_fixneg, subset = type == "real")
+
+# Plot using median and standard deviation, default colours
+aggplot(lim_FWBk_fixneg, type, 
+        FUN.center = median, 
+        ylim = c(0, 70),
+        alpha = 0.3, legend = TRUE)
+```
+
+### Calculation of JNDs for Limenitis forewing black patch 
+
+Colour distances are obtained by weighting the Euclidean distance of the photoreceptor quantum catches by the Weber fraction of the cones (ΔS). These measurements are in units of Just Noticeable Differences (JNDs), where distances over a certain threshold (usually 1) are considered to be discernible under the conditions considered (e.g., backgrounds, illumination). 
+
+```{r}
+vismodel_limFWBk <- vismodel(limenitis_FW_black.rspec, 
+                            qcatch = "fi",
+                            visual = "avg.uv",
+                            achromatic = "bt.dc",
+                            illum = "bluesky",
+                            vonkries = T, scale = 30, bkg = "green",
+                            relative = TRUE)
+vismodel_limFWBk_JND <- coldist(vismodel_limFWBk)
+vismodel_limFWBk_JND
+```
+
+```{r}
+# Evan Code 
+vis.model2 <- vismodel(rspecdata = limenitis_FW_black.rspec, visual = 'bluetit', illum = 'bluesky', trans = 'bluetit', qcatch = 'fi', bkg = 'green', vonkries = TRUE)
+vis.model2
+JND2 <- coldist(vis.model2,noise = 'neural', n = c(0.37, 0.71, 0.99, 1.0)) 
+JND2
+# Warning: Quantum catch are relative, distances may not be meaningful 
+```
 

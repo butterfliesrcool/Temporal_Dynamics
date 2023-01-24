@@ -1,0 +1,120 @@
+---
+title: "Figures"
+author: "Abby Robinson"
+date: "1/19/2023"
+output: html_document
+---
+
+```{r}
+library(curl)
+library(sf)
+library(ggplot2)
+library(ggmap)
+library(sp)
+library(adehabitatHR) ##kernal density package 
+library(lubridate)
+library(ggspatial)
+library(rnaturalearth)
+library(rnaturalearthdata)
+```
+
+```{r}
+## battus 
+b <- curl("https://raw.githubusercontent.com/butterfliesrcool/BAMONA/main/battus_philenor.csv")
+battus <- read.csv(b, header = TRUE, sep = ",")
+
+clean.battus <- na.omit(battus)
+b <- subset(clean.battus, select = -c(Organism.Type,Location.Notes, Observation.Notes, Updated.Date, Partner.Project, Data.Source, Submitter ) )
+battus <- subset(b, Specimen.Type %in% c("Specimen", "Photograph"), drop = FALSE)
+battus_dates <- parse_date_time(battus$Observation.Date, "mdy")
+battus_dates <- year(battus_dates)
+battus$Year <- battus_dates
+
+battus_since2010 <- subset(battus, Year >= 2010)
+
+# Create a coordinate column, with both your X and Y values:
+xy <- battus_since2010[, c("Longitude", "Lat.Long")]
+
+# Create your Spatial Points dataframe:
+
+battus.sp <- SpatialPointsDataFrame(coords = xy, data = battus_since2010, proj4string = CRS("+proj=utm +zone=18 +south +datum=WGS84 +units=m +no_defs"))
+head(battus.sp)
+```
+
+```{r}
+l <- curl("https://raw.githubusercontent.com/butterfliesrcool/BAMONA/main/limenitis_arthemis_astyanax.csv")
+limenitis <- read.csv(l, header = TRUE, sep = ",")
+
+clean.limenitis <- na.omit(limenitis)
+l <- subset(clean.limenitis, select = -c(Organism.Type,Location.Notes, Observation.Notes, Updated.Date, Partner.Project, Data.Source, Submitter ) )
+limenitis <- subset(l, Specimen.Type %in% c("Specimen", "Photograph"), drop = FALSE)
+
+limenitis_dates <- parse_date_time(limenitis$Observation.Date, "mdy")
+limenitis_dates <- year(limenitis_dates)
+limenitis$Year <- limenitis_dates
+
+limenitis_since2010 <- subset(limenitis, Year >= 2010)
+
+# Create a coordinate column, with both your X and Y values:
+xy <- limenitis_since2010[, c("Longitude", "Lat.Long")]
+
+# Create your Spatial Points dataframe:
+
+limenitis.sp <- SpatialPointsDataFrame(coords = xy, data = limenitis_since2010, proj4string = CRS("+proj=utm +zone=18 +south +datum=WGS84 +units=m +no_defs"))
+head(limenitis.sp)
+```
+
+```{r}
+##  battus 
+
+battus_k100 <- kernelUD(battus.sp)
+bat.kern95 <- getverticeshr(battus_k100, percent = 95)
+
+bat.kern95 <- st_as_sf(bat.kern95)
+
+bat.kern <- ggplot() + geom_sf(data = bat.kern95, color = "salmon1", fill = "salmon1", alpha = 0.3)
+bat.kern
+```
+
+```{r}
+##  limenitis 
+
+limenitis_k100 <- kernelUD(limenitis.sp)
+lim.kern95 <- getverticeshr(limenitis_k100, percent = 95)
+
+lim.kern95 <- st_as_sf(lim.kern95)
+
+lim.kern <- ggplot() + geom_sf(data = lim.kern95, color = "navyblue", fill = "navyblue", alpha = 0.3) 
+lim.kern
+```
+
+```{r}
+MainStates <- map_data("state")
+
+plot <- ggplot() + 
+        geom_polygon( data=MainStates, aes(x=long, y=lat, group=group), color="grey", fill = "white") + 
+        geom_sf(data = bat.kern95, color = "salmon1", fill = "salmon1", alpha = 0.3) + 
+        geom_sf(data = lim.kern95, color = "royalblue1", fill = "royalblue1", alpha = 0.3) +
+        theme_bw() + xlab("Longitude") + ylab("Latitude")
+plot
+
+which_layers(compare.plot.08to11, "GeomPolygon")
+shift_layers(compare.plot.08to11, "GeomPolygon", shift = -1)
+
+
+all.kern95 <- b +
+
+                geom_sf(data = bat.kern95, color = "salmon1", fill = "salmon1", alpha = 0.3) + 
+                geom_sf(data = lim.kern95, color = "royalblue1", fill = "royalblue1", alpha = 0.3) +
+                annotation_scale(location = "bl", width_hint = 0.5) +
+                annotation_north_arrow(location = "bl", which_north = "false", 
+                    pad_x = unit(0.75, "in"), pad_y = unit(0.5, "in"),
+                    style = north_arrow_fancy_orienteering) +
+                coord_sf(xlim = c(-130, -70), ylim = c(25, 50)) +    
+  
+                geom_map(data=dat[dat$region=="USA",], map=dat[dat$region=="USA",],
+                    aes(x=long, y=lat, map_id=region),
+                    color="white", fill="#7f7f7f", size=0.05, alpha=1/4) +
+                coord_sf(xlim = c(-120, -70), ylim = c(25, 50)) 
+all.kern95
+```
